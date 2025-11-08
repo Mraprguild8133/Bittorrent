@@ -46,10 +46,18 @@ def is_user_allowed(user_id: int) -> bool:
     user_requests[user_id] = current_time
     return True
 
+def get_time_until_next_request(user_id: int) -> int:
+    """Get remaining time until user can make next request"""
+    if user_id not in user_requests:
+        return 0
+    last_request = user_requests[user_id]
+    elapsed = time.time() - last_request
+    return max(0, config.REQUEST_COOLDOWN - elapsed)
+
 @app.on_message(filters.command("start") & filters.private)
 async def start_command(client: Client, message: types.Message):
     """Handle /start command"""
-    welcome_text = """
+    welcome_text = f"""
 👋 Welcome to **Magnet to Video Converter Bot**!
 
 🤖 **How to use:**
@@ -65,11 +73,10 @@ async def start_command(client: Client, message: types.Message):
 ⚠️ **Important:**
 - Files must be under 2GB
 - Please allow time for processing
-- One request per {cooldown} minutes
+- One request per {config.REQUEST_COOLDOWN // 60} minutes
 
 Send a magnet link to get started!
-""".format(cooldown=config.REQUEST_COOLDOWN // 60)
-    
+"""
     await message.reply_text(welcome_text)
 
 @app.on_message(filters.command("help") & filters.private)
@@ -85,5 +92,6 @@ async def help_command(client: Client, message: types.Message):
 - `/start` - Start the bot
 - `/help` - Show this help message
 - `/status` - Check bot status
+- `/stats` - Show your usage statistics
 
 **Examples:**
