@@ -1,6 +1,6 @@
-pyrogram==2.0.106
-tgcrypto==1.2.5
-python-qbittorrent==0.4.9
-python-dotenv==1.0.0
-aiofiles==23.2.1
-aiohttp==3.9.1
+pyrogram>=2.0.106
+tgcrypto>=1.2.5
+python-qbittorrent>=0.4.9
+python-dotenv>=1.0.0
+aiofiles>=23.2.1
+aiohttp>=3.9.1
