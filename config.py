@@ -21,6 +21,7 @@ class Config:
         # GDToT Configuration
         self.GDToT_API_KEY: str = os.environ.get("GDToT_API_KEY", "")
         self.GDTOT_ENABLED: bool = os.environ.get("GDTOT_ENABLED", "true").lower() == "true"
+        self.GDTOT_API_URL: str = "https://new.gdtot.com/api/upload/link"
         
         # Bot Constants
         self.TEMP_DOWNLOAD_DIR: str = "downloads/"
