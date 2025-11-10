@@ -8,19 +8,24 @@ from pyrogram.errors import FloodWait, RPCError
 # Import configuration
 try:
     from config import config
-    config.validate()  # Only if using the simple config class
 except ImportError:
     # Fallback to environment variables
     import sys
-    print("Error: config.py not found or invalid")
+    print("Error: config.py not found")
     sys.exit(1)
+
+# Validate essential configuration
+if not all([config.API_ID, config.API_HASH, config.BOT_TOKEN]):
+    print("Error: Missing required Telegram API credentials")
+    print("Please set API_ID, API_HASH, and BOT_TOKEN environment variables")
+    exit(1)
 
 # External library imports
 try:
     import boto3
     from botocore.config import Config
 except ImportError:
-    print("Please install required libraries: pip install -r requirements.txt")
+    print("Please install required libraries: pip install boto3")
     exit(1)
 
 # --- Logging Setup ---
@@ -131,7 +136,10 @@ async def upload_to_wasabi(client: Client, chat_id: int, file_path: str):
     finally:
         # Clean up local file
         if os.path.exists(file_path):
-            os.remove(file_path)
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
 
 async def handle_download_and_process(client: Client, message: Message, file_id: str):
     """Download file and upload to Wasabi."""
@@ -150,7 +158,9 @@ async def handle_download_and_process(client: Client, message: Message, file_id:
         
         if local_path:
             await status_msg.edit_text("✅ **Download Complete!**\nStarting upload to Wasabi...")
-            await upload_to_wasabi(client, message.chat.id, local_path)
+            success = await upload_to_wasabi(client, message.chat.id, local_path)
+            if not success:
+                await status_msg.edit_text("❌ Upload failed. File saved locally.")
         else:
             await status_msg.edit_text("❌ Download failed.")
             
@@ -170,9 +180,7 @@ async def start_command(client: Client, message: Message):
         f"• Wasabi Storage: {wasabi_status}\n"
         f"• Max File Size: {config.MAX_FILE_SIZE}MB\n\n"
         f"**Commands:**\n"
-        f"• `/mirror` - Upload replied file to Wasabi\n"
-        f"• `/convert mp4` - Convert video (coming soon)\n"
-        f"• `/download` - Download from URL (coming soon)\n\n"
+        f"• `/mirror` - Upload replied file to Wasabi\n\n"
         f"**User ID:** `{message.from_user.id}`"
     )
 
@@ -197,6 +205,9 @@ async def mirror_command(client: Client, message: Message):
         file_id = media.audio.file_id
         file_size = media.audio.file_size
         file_name = media.audio.file_name or "audio.mp3"
+    elif media.photo:
+        await message.reply_text("❌ Photos are not supported. Please send as document.")
+        return
     else:
         await message.reply_text("❌ Unsupported media type.")
         return
@@ -212,11 +223,34 @@ async def mirror_command(client: Client, message: Message):
     await message.reply_text(f"📦 **Processing:** `{file_name}`")
     await handle_download_and_process(client, message, file_id)
 
+@app.on_message(filters.command("status"))
+async def status_command(client: Client, message: Message):
+    """Show bot status."""
+    wasabi_status = "✅ Connected" if WASABI_CLIENT else "❌ Disabled"
+    download_dir_exists = os.path.exists(config.DOWNLOAD_PATH)
+    
+    status_text = (
+        f"🤖 **Bot Status**\n\n"
+        f"• **Wasabi Storage:** {wasabi_status}\n"
+        f"• **Download Path:** {'✅ Exists' if download_dir_exists else '❌ Missing'}\n"
+        f"• **Max File Size:** {config.MAX_FILE_SIZE}MB\n"
+        f"• **API ID:** `{config.API_ID}`\n"
+        f"• **Bucket:** `{config.WASABI_BUCKET or 'Not set'}`\n"
+    )
+    
+    await message.reply_text(status_text)
+
 # --- Main Execution ---
 if __name__ == "__main__":
     logger.info("Starting Media Handler Bot...")
+    logger.info(f"API ID: {config.API_ID}")
     logger.info(f"Download path: {config.DOWNLOAD_PATH}")
     logger.info(f"Max file size: {config.MAX_FILE_SIZE}MB")
     logger.info(f"Wasabi enabled: {WASABI_CLIENT is not None}")
     
-    app.run()
+    try:
+        app.run()
+    except KeyboardInterrupt:
+        logger.info("Bot stopped by user")
+    except Exception as e:
+        logger.error(f"Bot crashed: {e}")
